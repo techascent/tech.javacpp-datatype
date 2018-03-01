@@ -27,40 +27,40 @@
 
 (extend-protocol dtype-base/PDatatype
   BytePointer
-  (get-datatype [ptr] :byte)
+  (get-datatype [ptr] :int8)
   ShortPointer
-  (get-datatype [ptr] :short)
+  (get-datatype [ptr] :int16)
   IntPointer
-  (get-datatype [ptr] :int)
+  (get-datatype [ptr] :int32)
   LongPointer
-  (get-datatype [ptr] :long)
+  (get-datatype [ptr] :int64)
   FloatPointer
-  (get-datatype [ptr] :float)
+  (get-datatype [ptr] :float32)
   DoublePointer
-  (get-datatype [ptr] :double))
+  (get-datatype [ptr] :float64))
 
 
 (defn make-pointer-of-type
   ^Pointer  [datatype size-or-data]
   (let [ary (dtype/make-array-of-type datatype size-or-data)]
     (cond
-      (= datatype :byte) (BytePointer. ^bytes ary)
-      (= datatype :short) (ShortPointer. ^shorts ary)
-      (= datatype :int) (IntPointer. ^ints ary)
-      (= datatype :long) (LongPointer. ^longs ary)
-      (= datatype :float) (FloatPointer. ^floats ary)
-      (= datatype :double) (DoublePointer. ^doubles ary))))
+      (= datatype :int8) (BytePointer. ^bytes ary)
+      (= datatype :int16) (ShortPointer. ^shorts ary)
+      (= datatype :int32) (IntPointer. ^ints ary)
+      (= datatype :int64) (LongPointer. ^longs ary)
+      (= datatype :float32) (FloatPointer. ^floats ary)
+      (= datatype :float64) (DoublePointer. ^doubles ary))))
 
 
 (defn make-empty-pointer-of-type
   ^Pointer [datatype]
   (cond
-    (= datatype :byte) (BytePointer.)
-    (= datatype :short) (ShortPointer.)
-    (= datatype :int) (IntPointer.)
-    (= datatype :long) (LongPointer.)
-    (= datatype :float) (FloatPointer.)
-    (= datatype :double) (DoublePointer.)))
+    (= datatype :int8) (BytePointer.)
+    (= datatype :int16) (ShortPointer.)
+    (= datatype :int32) (IntPointer.)
+    (= datatype :int64) (LongPointer.)
+    (= datatype :float32) (FloatPointer.)
+    (= datatype :float64) (DoublePointer.)))
 
 
 (defn- get-private-field [^Class cls field-name]
