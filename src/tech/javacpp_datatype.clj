@@ -43,24 +43,24 @@
 (defn make-pointer-of-type
   ^Pointer  [datatype size-or-data]
   (let [ary (dtype/make-array-of-type datatype size-or-data)]
-    (cond
-      (= datatype :int8) (BytePointer. ^bytes ary)
-      (= datatype :int16) (ShortPointer. ^shorts ary)
-      (= datatype :int32) (IntPointer. ^ints ary)
-      (= datatype :int64) (LongPointer. ^longs ary)
-      (= datatype :float32) (FloatPointer. ^floats ary)
-      (= datatype :float64) (DoublePointer. ^doubles ary))))
+    (condp = datatype
+      :int8 (BytePointer. ^bytes ary)
+      :int16 (ShortPointer. ^shorts ary)
+      :int32 (IntPointer. ^ints ary)
+      :int64 (LongPointer. ^longs ary)
+      :float32 (FloatPointer. ^floats ary)
+      :float64 (DoublePointer. ^doubles ary))))
 
 
 (defn make-empty-pointer-of-type
   ^Pointer [datatype]
-  (cond
-    (= datatype :int8) (BytePointer.)
-    (= datatype :int16) (ShortPointer.)
-    (= datatype :int32) (IntPointer.)
-    (= datatype :int64) (LongPointer.)
-    (= datatype :float32) (FloatPointer.)
-    (= datatype :float64) (DoublePointer.)))
+  (condp = datatype
+    :int8 (BytePointer.)
+    :int16 (ShortPointer.)
+    :int32 (IntPointer.)
+    :int64 (LongPointer.)
+    :float32 (FloatPointer.)
+    :float64 (DoublePointer.)))
 
 
 (defn- get-private-field [^Class cls field-name]
