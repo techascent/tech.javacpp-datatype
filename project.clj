@@ -1,4 +1,4 @@
-(defproject techascent/tech.javacpp-datatype "0.3.3-SNAPSHOT"
+(defproject techascent/tech.javacpp-datatype "0.3.3"
   :description "Bindings between javacpp and tech.datatype"
   :url "http://github.com/tech-ascent/tech.javacpp-datatype"
   :license {:name "Eclipse Public License"
