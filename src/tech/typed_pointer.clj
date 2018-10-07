@@ -1,8 +1,8 @@
 (ns tech.typed-pointer
-  "A typed pointer is an abstract concept that must satisfy concepts such as
-the get-datatype and the ->ptr interfaces.  It is logically a tuple of base pointer
-and datatype.  In this way fat pointers can support unsigned datatypes even though the base
-javacpp pointers mirror the signed jvm primitive types."
+  "A typed pointer is an abstract concept that must satisfy concepts such as the
+  get-datatype and the ->ptr interfaces.  It is logically a tuple of base pointer and
+  datatype.  In this way fat pointers can support unsigned datatypes even though the
+  base javacpp pointers mirror the signed jvm primitive types."
   (:require [tech.javacpp-datatype :as jcpp-dtype]
             [tech.datatype.base :as dtype]
             [tech.datatype.marshal :as marshal]
@@ -335,9 +335,10 @@ javacpp pointers mirror the signed jvm primitive types."
           elem-count (long (if is-num?
                              elem-count-or-data
                              (dtype/ecount elem-count-or-data)))
-          retval (->TypedPointer (jcpp-dtype/make-pointer-of-type (direct-conversion-map dtype)
-                                                                elem-count)
-                               dtype)]
+          retval (->TypedPointer (jcpp-dtype/make-pointer-of-type
+                                  (direct-conversion-map dtype)
+                                  elem-count)
+                                 dtype)]
       (when-not is-num?
         (dtype/copy-raw->item! elem-count-or-data retval 0))
       retval)))
