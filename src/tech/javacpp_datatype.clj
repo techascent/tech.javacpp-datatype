@@ -1,7 +1,6 @@
 (ns tech.javacpp-datatype
   (:require [tech.datatype.core :as dtype]
             [tech.datatype.base :as dtype-base]
-            [tech.datatype.marshal :as marshal]
             [clojure.core.matrix.protocols :as mp]
             [think.resource.core :as resource])
   (:import [org.bytedeco.javacpp
@@ -15,7 +14,8 @@
 
 ;;Necessary for testing
 (comment
-  (import org.bytedeco.javacpp.opencv_core))
+  (import org.bytedeco.javacpp.opencv_core)
+  )
 
 
 ;;!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -121,10 +121,10 @@ threadsafe while (.position ptr offset) is not."
   (.set ^Field deallocator-field ptr nil))
 
 
-(defn as-buffer
+(defn ptr->buffer
   "Get a nio buffer from the pointer to use in other places.  Note this
   function is threadsafe while a raw .asBuffer call is not!!!
-  https://github.com/bytedeco/javacpp/issues/155"
+  https://github.com/bytedeco/javacpp/issues/155."
   [^Pointer ptr]
   (.asBuffer (duplicate-pointer ptr)))
 
@@ -132,17 +132,20 @@ threadsafe while (.position ptr offset) is not."
 (extend-type Pointer
   resource/PResource
   (release-resource [ptr] (release-pointer ptr))
-    dtype-base/PAccess
-  (set-value! [ptr ^long offset value] (dtype-base/set-value! (as-buffer ptr) offset value))
+  dtype-base/PAccess
+  (set-value! [ptr ^long offset value] (dtype-base/set-value! (ptr->buffer ptr) offset value))
   (set-constant! [ptr offset value elem-count]
-    (dtype-base/set-constant! (as-buffer ptr) offset value elem-count))
-  (get-value [ptr ^long offset] (dtype-base/get-value (as-buffer ptr) offset))
+    (dtype-base/set-constant! (ptr->buffer ptr) offset value elem-count))
+  (get-value [ptr ^long offset] (dtype-base/get-value (ptr->buffer ptr) offset))
   mp/PElementCount
   (element-count [ptr] (.capacity ptr))
-  marshal/PContainerType
-  (container-type [ptr] :javacpp-ptr))
+  dtype-base/PContainerType
+  (container-type [ptr] :javacpp-ptr)
+  dtype-base/PCopyRawData
+  (copy-raw->item! [raw-data ary-target target-offset options]
+    (dtype-base/copy-raw->item! (ptr->buffer raw-data) ary-target target-offset options)))
 
 
-(marshal/add-conversion-fn :javacpp-ptr :nio-buffer
-                           (fn [src-data src-offset]
-                             [(as-buffer src-data) src-offset]))
+(dtype-base/add-container-conversion-fn :javacpp-ptr :nio-buffer
+                                        (fn [dst-dtype src-data]
+                                          [(ptr->buffer src-data) 0]))

@@ -5,7 +5,7 @@
   base javacpp pointers mirror the signed jvm primitive types."
   (:require [tech.javacpp-datatype :as jcpp-dtype]
             [tech.datatype.base :as dtype]
-            [tech.datatype.marshal :as marshal]
+            [tech.datatype.java-primitive :as primitive]
             [think.resource.core :as resource]
             [clojure.core.matrix.protocols :as mp]
             [clojure.core.matrix.macros :refer [c-for]])
@@ -16,18 +16,83 @@
             LongBuffer FloatBuffer DoubleBuffer]))
 
 
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* :warn-on-boxed)
+
+
 (defprotocol PToPtr
   (->ptr [item]))
 
+(def direct-conversion-pairs
+  [[:uint8 :int8]
+   [:uint16 :int16]
+   [:uint32 :int32]
+   [:uint64 :int64]])
 
-(defmacro unsigned->jvm
-  [src-dtype val]
-  (condp = src-dtype
-    :uint8 `(bit-and (unchecked-short ~val) 0xFF)
-    :uint16 `(bit-and (unchecked-int ~val) 0xFFFF)
-    :uint32 `(bit-and (unchecked-long ~val) 0xFFFFFFFF)
-    :uint64 `(bit-and (unchecked-long ~val) 0xFFFFFFFFFFFFFFF)
-    `~val))
+(def direct-conversion-map
+  (->> direct-conversion-pairs
+       (mapcat (fn [[x y]]
+                 [[x y]
+                  [y x]]))
+       (into {})))
+
+(defn direct-conversion?
+  [src-dtype dst-dtype]
+  (or (= src-dtype dst-dtype)
+      (and (signed-datatype? src-dtype)
+           (signed-datatype? dst-dtype))
+      (= (direct-conversion-map src-dtype) dst-dtype)))
+
+
+;;Adding in support for unsigned types
+(defmacro datatype->unsigned-max
+  [datatype]
+  (case datatype
+    :uint8 (short 0xFF)
+    :uint16 (int 0xFFFF)
+    :uint32 (long 0xFFFFFFFF)
+    :uint64 Long/MAX_VALUE))
+
+
+(defmacro check
+  [compile-time-max compile-time-min runtime-val]
+  `(if (or (> ~runtime-val
+                ~compile-time-max)
+             (< ~runtime-val
+                ~compile-time-min))
+     (throw (ex-info "Value out of range"
+                     {:min ~compile-time-min
+                      :max ~compile-time-max
+                      :value ~runtime-val}))
+     ~runtime-val))
+
+
+
+
+
+
+
+(defmacro datatype->unchecked-cast-fn
+  [src-dtype dst-dtype val]
+  (if (= src-dtype dst-dtype)
+    val
+    (case dst-dtype
+      :uint8 `(bit-and (unchecked-short ~val) 0xFF)
+      :uint16 `(bit-and (unchecked-int ~val) 0xFFFF)
+      :uint32 `(bit-and (unchecked-long ~val) 0xFFFFFFFF)
+      :uint64 `(unchecked-long ~val))))
+
+
+(defmacro datatype->cast-fn
+  [src-dtype dst-dtype val]
+  (if (or (= src-dtype dst-dtype)
+          (direct-conversion? src-dtype dst-dtype))
+    val
+    (case dst-dtype
+      :uint8 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype (check ~(short 0xff) 0 (short ~val)))
+      :uint16 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype (check ~(int 0xffff) 0 (int ~val)))
+      :uint32 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype (check ~(long 0xffffffff) 0 (long ~val)))
+      :uint64 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype ~val))))
 
 
 (defmacro jvm->unsigned
@@ -85,8 +150,9 @@
         (dtype/get-value ptr offset))))
 
   dtype/PCopyRawData
-  (copy-raw->item! [item dest dest-offset]
-    (marshal/copy! item 0 dest dest-offset (mp/element-count item))
+  (copy-raw->item! [item dest dest-offset options]
+    ()
+    (dtype/copy! item 0 dest dest-offset (mp/element-count item) options)
     [dest (+ (long dest-offset) (long (mp/element-count item)))])
 
   mp/PElementCount
@@ -96,7 +162,7 @@
   (release-resource [this]
     (resource/release-resource ptr))
 
-  marshal/PContainerType
+  dtype/PContainerType
   (container-type [this] :typed-pointer)
 
   PToPtr
@@ -161,27 +227,27 @@
 
 (defn typed-ptr->byte-nio-buffer
   ^ByteBuffer [^TypedPointer typed-ptr]
-  (jcpp-dtype/as-buffer (typed-ptr->byte-ptr typed-ptr)))
+  (jcpp-dtype/ptr->buffer (typed-ptr->byte-ptr typed-ptr)))
 
 (defn typed-ptr->short-nio-buffer
   ^ShortBuffer [^TypedPointer typed-ptr]
-  (jcpp-dtype/as-buffer (typed-ptr->short-ptr typed-ptr)))
+  (jcpp-dtype/ptr->buffer (typed-ptr->short-ptr typed-ptr)))
 
 (defn typed-ptr->int-nio-buffer
   ^IntBuffer [^TypedPointer typed-ptr]
-  (jcpp-dtype/as-buffer (typed-ptr->int-ptr typed-ptr)))
+  (jcpp-dtype/ptr->buffer (typed-ptr->int-ptr typed-ptr)))
 
 (defn typed-ptr->long-nio-buffer
   ^LongBuffer [^TypedPointer typed-ptr]
-  (jcpp-dtype/as-buffer (typed-ptr->long-ptr typed-ptr)))
+  (jcpp-dtype/ptr->buffer (typed-ptr->long-ptr typed-ptr)))
 
 (defn typed-ptr->float-nio-buffer
   ^FloatBuffer [^TypedPointer typed-ptr]
-  (jcpp-dtype/as-buffer (typed-ptr->float-ptr typed-ptr)))
+  (jcpp-dtype/ptr->buffer (typed-ptr->float-ptr typed-ptr)))
 
 (defn typed-ptr->double-nio-buffer
   ^DoubleBuffer [^TypedPointer typed-ptr]
-  (jcpp-dtype/as-buffer (typed-ptr->double-ptr typed-ptr)))
+  (jcpp-dtype/ptr->buffer (typed-ptr->double-ptr typed-ptr)))
 
 
 (defmacro typed-ptr->nio-buffer
@@ -216,7 +282,7 @@
                   [y x]]))
        (into {})))
 
-(def full-datatype-list (vec (concat dtype/datatypes unsigned-types)))
+(def full-datatype-list (vec (concat primitive/datatypes unsigned-types)))
 
 (def full-conversion-sequence
   (->> (for [src-dtype full-datatype-list
@@ -226,12 +292,7 @@
 
 (defn signed-datatype? [dtype] (not (unsigned-type-set dtype)))
 
-(defn direct-conversion?
-  [src-dtype dst-dtype]
-  (or (= src-dtype dst-dtype)
-      (and (signed-datatype? src-dtype)
-           (signed-datatype? dst-dtype))
-      (= (direct-conversion-map src-dtype) dst-dtype)))
+
 
 (defmacro array->typed-ptr-conversion
   [src-dtype dst-dtype]
@@ -277,9 +338,9 @@
   [src-dtype dst-dtype]
   (if (direct-conversion? src-dtype dst-dtype)
     `(fn [src-buf# src-offset# dst-buf# dst-offset# elem-count#]
-       (marshal/copy! (typed-ptr->nio-buffer ~src-dtype src-buf#) src-offset#
-                      (typed-ptr->nio-buffer ~dst-dtype dst-buf#) dst-offset#
-                      elem-count#))
+       (dtype/copy! (typed-ptr->nio-buffer ~src-dtype src-buf#) src-offset#
+                    (typed-ptr->nio-buffer ~dst-dtype dst-buf#) dst-offset#
+                    elem-count# {}))
     `(fn [src-buf# src-offset# dst-buf# dst-offset# elem-count#]
        (let [elem-count# (long elem-count#)
              src-buf# (typed-ptr->nio-buffer ~src-dtype src-buf#)
