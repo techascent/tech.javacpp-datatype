@@ -1,5 +1,5 @@
-(ns tech.typed-pointer-test
-  (:require [tech.typed-pointer :as typed-pointer]
+(ns tech.datatype.typed-pointer-test
+  (:require [tech.datatype.jcpp-unsigned :as typed-pointer]
             [clojure.test :refer :all]
             [tech.datatype.base :as dtype]
             [think.resource.core :as resource])
@@ -12,7 +12,7 @@
 (deftest typed-pointer-test
   (with-bindings {#'dtype/*error-on-slow-path* true}
     (resource/with-resource-context
-      (let [byte-data (typed-pointer/make-pointer-of-type :uint8 [0 1 128 254 255])
+      (let [byte-data (typed-pointer/make-typed-pointer :uint8 [0 1 128 254 255])
             double-data (double-array 5)]
         (dtype/copy! byte-data double-data)
         (is (= [0 1 128 254 255]

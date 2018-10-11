@@ -1,6 +1,7 @@
-(ns tech.javacpp-datatype
+(ns tech.datatype.javacpp
   (:require [tech.datatype.core :as dtype]
             [tech.datatype.base :as dtype-base]
+            [tech.datatype.java-primitive :as primitive]
             [clojure.core.matrix.protocols :as mp]
             [think.resource.core :as resource])
   (:import [org.bytedeco.javacpp
@@ -41,15 +42,17 @@
 
 
 (defn make-pointer-of-type
-  ^Pointer  [datatype size-or-data]
-  (let [ary (dtype/make-array-of-type datatype size-or-data)]
-    (condp = datatype
-      :int8 (BytePointer. ^bytes ary)
-      :int16 (ShortPointer. ^shorts ary)
-      :int32 (IntPointer. ^ints ary)
-      :int64 (LongPointer. ^longs ary)
-      :float32 (FloatPointer. ^floats ary)
-      :float64 (DoublePointer. ^doubles ary))))
+  (^Pointer  [datatype size-or-data options]
+   (let [ary (dtype/make-array-of-type datatype size-or-data options)]
+     (condp = datatype
+       :int8 (BytePointer. ^bytes ary)
+       :int16 (ShortPointer. ^shorts ary)
+       :int32 (IntPointer. ^ints ary)
+       :int64 (LongPointer. ^longs ary)
+       :float32 (FloatPointer. ^floats ary)
+       :float64 (DoublePointer. ^doubles ary))))
+  (^Pointer [datatype size-or-data]
+   (make-pointer-of-type datatype size-or-data {})))
 
 
 (defn make-empty-pointer-of-type
@@ -133,7 +136,8 @@ threadsafe while (.position ptr offset) is not."
   resource/PResource
   (release-resource [ptr] (release-pointer ptr))
   dtype-base/PAccess
-  (set-value! [ptr ^long offset value] (dtype-base/set-value! (ptr->buffer ptr) offset value))
+  (set-value! [ptr ^long offset value] (dtype-base/set-value! (ptr->buffer ptr)
+                                                              offset value))
   (set-constant! [ptr offset value elem-count]
     (dtype-base/set-constant! (ptr->buffer ptr) offset value elem-count))
   (get-value [ptr ^long offset] (dtype-base/get-value (ptr->buffer ptr) offset))
@@ -143,7 +147,15 @@ threadsafe while (.position ptr offset) is not."
   (container-type [ptr] :javacpp-ptr)
   dtype-base/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset options]
-    (dtype-base/copy-raw->item! (ptr->buffer raw-data) ary-target target-offset options)))
+    (dtype-base/copy-raw->item! (ptr->buffer raw-data) ary-target
+                                target-offset options))
+  primitive/PToBuffer
+  (->buffer-backing-store [src]
+    (ptr->buffer src))
+
+  primitive/PToArray
+  (->array [src] nil)
+  (->array-copy [src] (primitive/->array-copy (ptr->buffer src))))
 
 
 (dtype-base/add-container-conversion-fn :javacpp-ptr :nio-buffer
