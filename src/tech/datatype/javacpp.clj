@@ -2,6 +2,7 @@
   (:require [tech.datatype.core :as dtype]
             [tech.datatype.base :as dtype-base]
             [tech.datatype.java-primitive :as primitive]
+            [tech.datatype.java-unsigned :as unsigned]
             [clojure.core.matrix.protocols :as mp]
             [think.resource.core :as resource])
   (:import [org.bytedeco.javacpp
@@ -12,6 +13,12 @@
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
+
+
+(defprotocol PToPtr
+  "Anything convertible to a pointer that shares the backing store.  Datatypes do not have
+  to match."
+  (->ptr-backing-store [item]))
 
 ;;Necessary for testing
 (comment
@@ -144,20 +151,19 @@ threadsafe while (.position ptr offset) is not."
   mp/PElementCount
   (element-count [ptr] (.capacity ptr))
   dtype-base/PContainerType
-  (container-type [ptr] :javacpp-ptr)
+  (container-type [ptr] :typed-buffer)
   dtype-base/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset options]
     (dtype-base/copy-raw->item! (ptr->buffer raw-data) ary-target
                                 target-offset options))
+
+  PToPtr
+  (->ptr-backing-store [item] item)
+
   primitive/PToBuffer
   (->buffer-backing-store [src]
-    (ptr->buffer src))
+    (ptr->buffer (->ptr-backing-store src)))
 
   primitive/PToArray
   (->array [src] nil)
-  (->array-copy [src] (primitive/->array-copy (ptr->buffer src))))
-
-
-(dtype-base/add-container-conversion-fn :javacpp-ptr :nio-buffer
-                                        (fn [dst-dtype src-data]
-                                          [(ptr->buffer src-data) 0]))
+  (->array-copy [src] (primitive/->array-copy (unsigned/->typed-buffer src))))
