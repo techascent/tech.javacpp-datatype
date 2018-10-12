@@ -16,8 +16,8 @@
 
 
 (defprotocol PToPtr
-  "Anything convertible to a pointer that shares the backing store.  Datatypes do not have
-  to match."
+  "Anything convertible to a pointer that shares the backing store.  Datatypes do not
+  have to match."
   (->ptr-backing-store [item]))
 
 ;;Necessary for testing
@@ -136,7 +136,8 @@ threadsafe while (.position ptr offset) is not."
   function is threadsafe while a raw .asBuffer call is not!!!
   https://github.com/bytedeco/javacpp/issues/155."
   [^Pointer ptr]
-  (.asBuffer (duplicate-pointer ptr)))
+  (.asBuffer (duplicate-pointer
+              (->ptr-backing-store ptr))))
 
 
 (extend-type Pointer
@@ -162,8 +163,66 @@ threadsafe while (.position ptr offset) is not."
 
   primitive/PToBuffer
   (->buffer-backing-store [src]
-    (ptr->buffer (->ptr-backing-store src)))
+    (ptr->buffer src))
 
   primitive/PToArray
   (->array [src] nil)
   (->array-copy [src] (primitive/->array-copy (unsigned/->typed-buffer src))))
+
+
+
+(defrecord TypedPointer [ptr datatype]
+  dtype-base/PDatatype
+  (get-datatype [_] datatype)
+  dtype-base/PAccess
+  (set-value! [item offset value]
+    (dtype-base/set-value! (unsigned/->typed-buffer item)
+                           offset value))
+  (set-constant! [item offset value elem-count]
+    (dtype-base/set-constant! (unsigned/->typed-buffer item)
+                              offset value elem-count))
+  (get-value [item offset]
+    (dtype-base/get-value (unsigned/->typed-buffer item)
+                          offset))
+  mp/PElementCount
+  (element-count [_] (mp/element-count ptr))
+  dtype-base/PContainerType
+  (container-type [item] :typed-buffer)
+  dtype-base/PCopyRawData
+  (copy-raw->item! [raw-data ary-target target-offset options]
+    (dtype-base/copy-raw->item! (unsigned/->typed-buffer raw-data) ary-target
+                                target-offset options))
+
+  PToPtr
+  (->ptr-backing-store [item] ptr)
+
+  primitive/PToBuffer
+  (->buffer-backing-store [item]
+    (ptr->buffer (->ptr-backing-store item)))
+
+  primitive/PToArray
+  (->array [item] nil)
+  (->array-copy [item] (primitive/->array-copy
+                        (unsigned/->typed-buffer item))))
+
+
+(defn ->typed-pointer
+  ([ptr datatype]
+   (->TypedPointer ptr datatype))
+  ([ptr]
+   (->typed-pointer ptr (dtype/get-datatype ptr))))
+
+
+(defn make-typed-pointer
+  "Make a 'typed' pointer, a type where the pointer type differs
+  from the datatype.  Used to support datatypes that do not exist in
+  the jvm."
+  ([datatype elem-count-or-seq options]
+   (->typed-pointer
+    (make-pointer-of-type (unsigned/datatype->jvm-datatype datatype)
+                          (unsigned/unsigned-safe-elem-count-or-seq
+                           datatype elem-count-or-seq options)
+                          (assoc options :unchecked? true))
+    datatype))
+  ([datatype elem-count-or-seq]
+   (make-typed-pointer datatype elem-count-or-seq {})))
