@@ -2,6 +2,7 @@
   (:require [clojure.test :refer :all]
             [tech.datatype.javacpp :as jcpp-dtype]
             [tech.datatype.base :as base]
+            [tech.datatype.java-primitive :as primitive]
             [think.resource.core :as resource])
   ;;required to load some of the javacpp help functions; they are small functions
   ;;compiled into each bound library.
@@ -35,3 +36,15 @@
       (base/copy! typed-ptr 0 byte-data 0 20 {:unchecked? true})
       (is (= (vec signed-data)
              (vec byte-data))))))
+
+
+(deftest datatype-base-->array
+  (resource/with-resource-context
+    (let [base-ptr (jcpp-dtype/make-pointer-of-type :float32 (range 10))
+          typed-ptr (jcpp-dtype/make-typed-pointer :int32 10)]
+      ;;These should be nil but should not cause exceptions.
+      (is (and (not (primitive/->array base-ptr))
+               (not (primitive/->array typed-ptr))))
+      (base/copy! base-ptr typed-ptr)
+      (is (= (vec (range 10))
+             (base/->vector typed-ptr))))))
