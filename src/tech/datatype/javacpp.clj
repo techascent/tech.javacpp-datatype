@@ -50,14 +50,15 @@
 
 (defn make-pointer-of-type
   (^Pointer  [datatype size-or-data options]
-   (let [ary (dtype/make-array-of-type datatype size-or-data options)]
-     (condp = datatype
-       :int8 (BytePointer. ^bytes ary)
-       :int16 (ShortPointer. ^shorts ary)
-       :int32 (IntPointer. ^ints ary)
-       :int64 (LongPointer. ^longs ary)
-       :float32 (FloatPointer. ^floats ary)
-       :float64 (DoublePointer. ^doubles ary))))
+   (-> (let [ary (dtype/make-array-of-type datatype size-or-data options)]
+         (condp = datatype
+           :int8 (BytePointer. ^bytes ary)
+           :int16 (ShortPointer. ^shorts ary)
+           :int32 (IntPointer. ^ints ary)
+           :int64 (LongPointer. ^longs ary)
+           :float32 (FloatPointer. ^floats ary)
+           :float64 (DoublePointer. ^doubles ary)))
+       resource/track))
   (^Pointer [datatype size-or-data]
    (make-pointer-of-type datatype size-or-data {})))
 
