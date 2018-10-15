@@ -3,7 +3,7 @@
             [tech.datatype.javacpp :as jcpp-dtype]
             [tech.datatype.base :as base]
             [tech.datatype.java-primitive :as primitive]
-            [think.resource.core :as resource])
+            [tech.resource :as resource])
   ;;required to load some of the javacpp help functions; they are small functions
   ;;compiled into each bound library.
   (:import [org.bytedeco.javacpp opencv_core]))

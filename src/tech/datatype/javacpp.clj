@@ -4,7 +4,7 @@
             [tech.datatype.java-primitive :as primitive]
             [tech.datatype.java-unsigned :as unsigned]
             [clojure.core.matrix.protocols :as mp]
-            [think.resource.core :as resource])
+            [tech.resource :as resource])
   (:import [org.bytedeco.javacpp
             BytePointer IntPointer LongPointer DoublePointer
             Pointer PointerPointer FloatPointer ShortPointer
