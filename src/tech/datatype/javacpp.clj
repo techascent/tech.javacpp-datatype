@@ -1,5 +1,5 @@
 (ns tech.datatype.javacpp
-  (:require [tech.datatype.core :as dtype]
+  (:require [tech.datatype :as dtype]
             [tech.datatype.base :as dtype-base]
             [tech.datatype.java-primitive :as primitive]
             [tech.datatype.java-unsigned :as unsigned]
