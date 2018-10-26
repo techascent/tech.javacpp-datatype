@@ -3,6 +3,8 @@
             [tech.datatype.javacpp :as jcpp-dtype]
             [tech.datatype.base :as base]
             [tech.datatype.java-primitive :as primitive]
+            [tech.datatype.java-unsigned :as unsigned]
+            [tech.datatype.jna :as dtype-jna]
             [tech.resource :as resource])
   ;;required to load some of the javacpp help functions; they are small functions
   ;;compiled into each bound library.
@@ -48,3 +50,9 @@
       (base/copy! base-ptr typed-ptr)
       (is (= (vec (range 10))
              (base/->vector typed-ptr))))))
+
+
+(deftest jcpp-ptr-interface-specification
+  (let [base-ptr (jcpp-dtype/make-pointer-of-type :float32 (range 10))]
+    (is (unsigned/typed-buffer? base-ptr))
+    (is (dtype-jna/typed-pointer? base-ptr))))

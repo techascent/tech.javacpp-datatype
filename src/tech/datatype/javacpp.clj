@@ -1,6 +1,7 @@
 (ns tech.datatype.javacpp
   (:require [tech.datatype :as dtype]
             [tech.datatype.base :as dtype-base]
+            [tech.datatype.jna :as dtype-jna]
             [tech.datatype.java-primitive :as primitive]
             [tech.datatype.java-unsigned :as unsigned]
             [clojure.core.matrix.protocols :as mp]
@@ -145,22 +146,33 @@ threadsafe while (.position ptr offset) is not."
   resource/PResource
   (release-resource [ptr] (release-pointer ptr))
   dtype-base/PAccess
-  (set-value! [ptr ^long offset value] (dtype-base/set-value! (ptr->buffer ptr)
-                                                              offset value))
+  (set-value! [ptr ^long offset value]
+    (dtype-base/set-value!
+     (dtype-jna/->typed-pointer ptr)
+     offset value))
   (set-constant! [ptr offset value elem-count]
-    (dtype-base/set-constant! (ptr->buffer ptr) offset value elem-count))
-  (get-value [ptr ^long offset] (dtype-base/get-value (ptr->buffer ptr) offset))
+    (dtype-base/set-constant! (dtype-jna/->typed-pointer ptr) offset value elem-count))
+  (get-value [ptr ^long offset]
+    (dtype-base/get-value (dtype-jna/->typed-pointer ptr) offset))
   mp/PElementCount
   (element-count [ptr] (.capacity ptr))
   dtype-base/PContainerType
-  (container-type [ptr] :typed-buffer)
+  ;;Do jna buffer to take advantage of faster memcpy, memset, and
+  ;;other things jna datatype bindings provide.
+  (container-type [ptr] :jna-buffer)
   dtype-base/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset options]
-    (dtype-base/copy-raw->item! (ptr->buffer raw-data) ary-target
+    (dtype-base/copy-raw->item! (dtype-jna/->typed-pointer raw-data) ary-target
                                 target-offset options))
 
   PToPtr
   (->ptr-backing-store [item] item)
+
+  dtype-jna/PToPtr
+  (->ptr-backing-store [item]
+    ;;Anything convertible to a pointer is convertible to a jna ptr too.
+    (let [^Pointer item-ptr (->ptr-backing-store item)]
+      (dtype-jna/make-jna-pointer (.address item-ptr))))
 
   primitive/PToBuffer
   (->buffer-backing-store [src]
@@ -168,62 +180,30 @@ threadsafe while (.position ptr offset) is not."
 
   primitive/PToArray
   (->array [src] nil)
-  (->array-copy [src] (primitive/->array-copy (unsigned/->typed-buffer src))))
-
-
-
-(defrecord TypedPointer [ptr datatype]
-  dtype-base/PDatatype
-  (get-datatype [_] datatype)
-  dtype-base/PAccess
-  (set-value! [item offset value]
-    (dtype-base/set-value! (unsigned/->typed-buffer item)
-                           offset value))
-  (set-constant! [item offset value elem-count]
-    (dtype-base/set-constant! (unsigned/->typed-buffer item)
-                              offset value elem-count))
-  (get-value [item offset]
-    (dtype-base/get-value (unsigned/->typed-buffer item)
-                          offset))
-  mp/PElementCount
-  (element-count [_] (mp/element-count ptr))
-  dtype-base/PContainerType
-  (container-type [item] :typed-buffer)
-  dtype-base/PCopyRawData
-  (copy-raw->item! [raw-data ary-target target-offset options]
-    (dtype-base/copy-raw->item! (unsigned/->typed-buffer raw-data) ary-target
-                                target-offset options))
-
-  PToPtr
-  (->ptr-backing-store [item] ptr)
-
-  primitive/PToBuffer
-  (->buffer-backing-store [item]
-    (ptr->buffer (->ptr-backing-store item)))
-
-  primitive/PToArray
-  (->array [item] nil)
-  (->array-copy [item] (primitive/->array-copy
-                        (unsigned/->typed-buffer item))))
-
-
-(defn ->typed-pointer
-  ([ptr datatype]
-   (->TypedPointer ptr datatype))
-  ([ptr]
-   (->typed-pointer ptr (dtype/get-datatype ptr))))
+  (->array-copy [src]
+    (primitive/->array-copy (unsigned/->typed-buffer src))))
 
 
 (defn make-typed-pointer
-  "Make a 'typed' pointer, a type where the pointer type differs
-  from the datatype.  Used to support datatypes that do not exist in
-  the jvm."
-  ([datatype elem-count-or-seq options]
-   (->typed-pointer
-    (make-pointer-of-type (unsigned/datatype->jvm-datatype datatype)
-                          (unsigned/unsigned-safe-elem-count-or-seq
-                           datatype elem-count-or-seq options)
-                          (assoc options :unchecked? true))
-    datatype))
-  ([datatype elem-count-or-seq]
-   (make-typed-pointer datatype elem-count-or-seq {})))
+  "This module no longer has a typed pointer, function provided to ease portability
+to jna system."
+  [datatype elem-seq-or-count & [options]]
+  (dtype-jna/make-typed-pointer datatype elem-seq-or-count options))
+
+
+(defn as-jpp-pointer
+  "Create a jcpp pointer that shares the backing store with the thing.
+Thing must implement tech.datatype.jna/PToPtr,
+tech.datatype.base/PDatatype, and clojure.core.matrix.protocols/PElementCount."
+  [item]
+  (when (and (satisfies? dtype-jna/PToPtr item)
+             (satisfies? dtype-base/PDatatype item)
+             (satisfies? mp/PElementCount item))
+    (let [address (-> (dtype-jna/->ptr-backing-store item)
+                      dtype-jna/pointer->address)
+          jvm-dtype (-> (dtype-base/get-datatype item)
+                        (unsigned/datatype->jvm-datatype))
+          n-elems (dtype-base/ecount item)]
+      (-> (make-empty-pointer-of-type jvm-dtype)
+          (offset-pointer address)
+          (set-pointer-limit-and-capacity n-elems)))))
