@@ -53,6 +53,10 @@
 
 
 (deftest jcpp-ptr-interface-specification
-  (let [base-ptr (jcpp-dtype/make-pointer-of-type :float32 (range 10))]
-    (is (unsigned/typed-buffer? base-ptr))
-    (is (dtype-jna/typed-pointer? base-ptr))))
+  (resource/with-resource-context
+    (let [base-ptr (jcpp-dtype/make-pointer-of-type :float32 (range 10))]
+      (is (unsigned/typed-buffer? base-ptr))
+      (is (dtype-jna/typed-pointer? base-ptr))
+      (is (instance? org.bytedeco.javacpp.Pointer (base/clone base-ptr)))
+      (is (= (base/->vector base-ptr)
+             (base/->vector (base/clone base-ptr)))))))

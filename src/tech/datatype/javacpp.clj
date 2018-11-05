@@ -164,6 +164,9 @@ threadsafe while (.position ptr offset) is not."
   (copy-raw->item! [raw-data ary-target target-offset options]
     (dtype-base/copy-raw->item! (dtype-jna/->typed-pointer raw-data) ary-target
                                 target-offset options))
+  dtype-base/PPrototype
+  (from-prototype [ptr]
+    (make-pointer-of-type (dtype/get-datatype ptr) (mp/element-count ptr)))
 
   PToPtr
   (->ptr-backing-store [item] item)
