@@ -2,6 +2,7 @@
   (:require [clojure.test :refer :all]
             [tech.datatype.javacpp :as jcpp-dtype]
             [tech.datatype.base :as base]
+            [tech.datatype :as dtype]
             [tech.datatype.java-primitive :as primitive]
             [tech.datatype.java-unsigned :as unsigned]
             [tech.datatype.jna :as dtype-jna]
@@ -57,6 +58,6 @@
     (let [base-ptr (jcpp-dtype/make-pointer-of-type :float32 (range 10))]
       (is (unsigned/typed-buffer? base-ptr))
       (is (dtype-jna/typed-pointer? base-ptr))
-      (is (instance? org.bytedeco.javacpp.Pointer (base/clone base-ptr)))
+      (is (instance? org.bytedeco.javacpp.Pointer (dtype/clone base-ptr)))
       (is (= (base/->vector base-ptr)
-             (base/->vector (base/clone base-ptr)))))))
+             (base/->vector (dtype/clone base-ptr :datatype :float32 )))))))
