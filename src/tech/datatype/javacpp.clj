@@ -2,6 +2,7 @@
   (:require [tech.datatype :as dtype]
             [tech.datatype.base :as dtype-base]
             [tech.datatype.jna :as dtype-jna]
+            [tech.jna :as jna]
             [tech.datatype.java-primitive :as primitive]
             [tech.datatype.java-unsigned :as unsigned]
             [clojure.core.matrix.protocols :as mp]
@@ -171,7 +172,7 @@ threadsafe while (.position ptr offset) is not."
   PToPtr
   (->ptr-backing-store [item] item)
 
-  dtype-jna/PToPtr
+  jna/PToPtr
   (->ptr-backing-store [item]
     ;;Anything convertible to a pointer is convertible to a jna ptr too.
     (let [^Pointer item-ptr (->ptr-backing-store item)]
@@ -180,6 +181,10 @@ threadsafe while (.position ptr offset) is not."
   primitive/PToBuffer
   (->buffer-backing-store [src]
     (ptr->buffer src))
+
+  primitive/POffsetable
+  (offset-item [src offset]
+    (primitive/offset-item (dtype-jna/->typed-pointer src) offset))
 
   primitive/PToArray
   (->array [src] nil)
@@ -196,13 +201,13 @@ to jna system."
 
 (defn as-jpp-pointer
   "Create a jcpp pointer that shares the backing store with the thing.
-Thing must implement tech.datatype.jna/PToPtr,
+Thing must implement tech.jna/PToPtr,
 tech.datatype.base/PDatatype, and clojure.core.matrix.protocols/PElementCount."
   [item]
-  (when (and (satisfies? dtype-jna/PToPtr item)
+  (when (and (satisfies? jna/PToPtr item)
              (satisfies? dtype-base/PDatatype item)
              (satisfies? mp/PElementCount item))
-    (let [address (-> (dtype-jna/->ptr-backing-store item)
+    (let [address (-> (jna/->ptr-backing-store item)
                       dtype-jna/pointer->address)
           jvm-dtype (-> (dtype-base/get-datatype item)
                         (unsigned/datatype->jvm-datatype))
