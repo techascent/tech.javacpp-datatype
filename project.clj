@@ -1,11 +1,11 @@
-(defproject techascent/tech.javacpp-datatype "2.1-SNAPSHOT"
+(defproject techascent/tech.javacpp-datatype "2.1"
   :description "Bindings between javacpp and tech.datatype"
   :url "http://github.com/tech-ascent/tech.javacpp-datatype"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.bytedeco/javacpp "1.4"]
-                 [techascent/tech.datatype "2.0"]]
+                 [techascent/tech.datatype "2.1"]]
 
   :profiles {:dev
              ;; there are a set of small functions that aren't compiled into the javacpp
