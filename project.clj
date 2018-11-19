@@ -5,7 +5,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.bytedeco/javacpp "1.4"]
-                 [techascent/tech.datatype "2.1"]]
+                 [techascent/tech.datatype "2.2"]]
 
   :profiles {:dev
              ;; there are a set of small functions that aren't compiled into the javacpp
