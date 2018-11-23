@@ -16,7 +16,7 @@
 
 
 (deftest ensure-fast-copy-paths
-  (resource/with-resource-context
+  (resource/stack-resource-context
     (with-bindings {#'base/*error-on-slow-path* true}
       (let [int-data (int-array [1 2 3 4 5 6])
             result (jcpp-dtype/make-pointer-of-type :float32 6)
@@ -27,7 +27,7 @@
                (vec short-data)))))))
 
 (deftest typed-pointers
-  (resource/with-resource-context
+  (resource/stack-resource-context
     (let [src-data (range 255 235 -1)
           typed-ptr (jcpp-dtype/make-typed-pointer :uint8 src-data)
           result-data (short-array 20)
@@ -42,7 +42,7 @@
 
 
 (deftest datatype-base-->array
-  (resource/with-resource-context
+  (resource/stack-resource-context
     (let [base-ptr (jcpp-dtype/make-pointer-of-type :float32 (range 10))
           typed-ptr (jcpp-dtype/make-typed-pointer :int32 10)]
       ;;These should be nil but should not cause exceptions.
@@ -54,7 +54,7 @@
 
 
 (deftest jcpp-ptr-interface-specification
-  (resource/with-resource-context
+  (resource/stack-resource-context
     (let [base-ptr (jcpp-dtype/make-pointer-of-type :float32 (range 10))]
       (is (unsigned/typed-buffer? base-ptr))
       (is (dtype-jna/typed-pointer? base-ptr))

@@ -6,7 +6,8 @@
             [tech.datatype.java-primitive :as primitive]
             [tech.datatype.java-unsigned :as unsigned]
             [clojure.core.matrix.protocols :as mp]
-            [tech.resource :as resource])
+            [tech.resource :as resource]
+            [tech.resource.stack :as stack])
   (:import [org.bytedeco.javacpp
             BytePointer IntPointer LongPointer DoublePointer
             Pointer PointerPointer FloatPointer ShortPointer
@@ -144,7 +145,7 @@ threadsafe while (.position ptr offset) is not."
 
 
 (extend-type Pointer
-  resource/PResource
+  stack/PResource
   (release-resource [ptr] (release-pointer ptr))
   dtype-base/PAccess
   (set-value! [ptr ^long offset value]
