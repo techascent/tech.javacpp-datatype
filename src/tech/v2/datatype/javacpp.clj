@@ -1,11 +1,11 @@
-(ns tech.datatype.javacpp
-  (:require [tech.datatype :as dtype]
-            [tech.datatype.base :as dtype-base]
-            [tech.datatype.jna :as dtype-jna]
+(ns tech.v2.datatype.javacpp
+  (:require [tech.v2.datatype :as dtype]
+            [tech.v2.datatype.protocols :as dtype-proto]
+            [tech.v2.datatype.base :as dtype-base]
+            [tech.v2.datatype.jna :as dtype-jna]
+            [tech.v2.datatype.casting :as casting]
+            [tech.v2.datatype.typed-buffer :as typed-buffer]
             [tech.jna :as jna]
-            [tech.datatype.java-primitive :as primitive]
-            [tech.datatype.java-unsigned :as unsigned]
-            [clojure.core.matrix.protocols :as mp]
             [tech.resource :as resource]
             [tech.resource.stack :as stack])
   (:import [org.bytedeco.javacpp
@@ -21,7 +21,14 @@
 (defprotocol PToPtr
   "Anything convertible to a pointer that shares the backing store.  Datatypes do not
   have to match."
-  (->ptr-backing-store [item]))
+  (convertible-to-javacpp-ptr? [item])
+  (->javacpp-ptr [item]))
+
+
+(defn as-javacpp-ptr
+  [item]
+  (when (convertible-to-javacpp-ptr? item)
+    (->javacpp-ptr [item])))
 
 ;;Necessary for testing
 (comment
@@ -36,7 +43,7 @@
 (System/setProperty "org.bytedeco.javacpp.nopointergc" "true")
 
 
-(extend-protocol dtype-base/PDatatype
+(extend-protocol dtype-proto/PDatatype
   BytePointer
   (get-datatype [ptr] :int8)
   ShortPointer
@@ -51,24 +58,9 @@
   (get-datatype [ptr] :float64))
 
 
-(defn make-pointer-of-type
-  (^Pointer  [datatype size-or-data options]
-   (-> (let [ary (dtype/make-array-of-type datatype size-or-data options)]
-         (condp = datatype
-           :int8 (BytePointer. ^bytes ary)
-           :int16 (ShortPointer. ^shorts ary)
-           :int32 (IntPointer. ^ints ary)
-           :int64 (LongPointer. ^longs ary)
-           :float32 (FloatPointer. ^floats ary)
-           :float64 (DoublePointer. ^doubles ary)))
-       resource/track))
-  (^Pointer [datatype size-or-data]
-   (make-pointer-of-type datatype size-or-data {})))
-
-
 (defn make-empty-pointer-of-type
   ^Pointer [datatype]
-  (condp = datatype
+  (case (casting/host-flatten datatype)
     :int8 (BytePointer.)
     :int16 (ShortPointer.)
     :int32 (IntPointer.)
@@ -135,62 +127,79 @@ threadsafe while (.position ptr offset) is not."
   (.set ^Field deallocator-field ptr nil))
 
 
-(defn ptr->buffer
-  "Get a nio buffer from the pointer to use in other places.  Note this
-  function is threadsafe while a raw .asBuffer call is not!!!
-  https://github.com/bytedeco/javacpp/issues/155."
-  [^Pointer ptr]
-  (.asBuffer (duplicate-pointer
-              (->ptr-backing-store ptr))))
+(defn ptr->typed-buffer
+  [item]
+  (let [item-dtype (dtype/get-datatype item)]
+    (dtype-jna/unsafe-address->typed-pointer
+     (com.sun.jna.Pointer/nativeValue (jna/->ptr-backing-store item))
+     (* (dtype/ecount item) (casting/numeric-byte-width (dtype/get-datatype item)))
+     (dtype/get-datatype item))))
 
 
 (extend-type Pointer
   stack/PResource
   (release-resource [ptr] (release-pointer ptr))
-  dtype-base/PAccess
-  (set-value! [ptr ^long offset value]
-    (dtype-base/set-value!
-     (dtype-jna/->typed-pointer ptr)
-     offset value))
-  (set-constant! [ptr offset value elem-count]
-    (dtype-base/set-constant! (dtype-jna/->typed-pointer ptr) offset value elem-count))
-  (get-value [ptr ^long offset]
-    (dtype-base/get-value (dtype-jna/->typed-pointer ptr) offset))
-  mp/PElementCount
-  (element-count [ptr] (.capacity ptr))
-  dtype-base/PContainerType
-  ;;Do jna buffer to take advantage of faster memcpy, memset, and
-  ;;other things jna datatype bindings provide.
-  (container-type [ptr] :jna-buffer)
-  dtype-base/PCopyRawData
+  dtype-proto/PCountable
+  (ecount [ptr] (.capacity ptr))
+  dtype-proto/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset options]
-    (dtype-base/copy-raw->item! (dtype-jna/->typed-pointer raw-data) ary-target
-                                target-offset options))
-  dtype-base/PPrototype
+    (dtype-proto/copy-raw->item! (ptr->typed-buffer raw-data)
+                                 ary-target
+                                 target-offset options))
+
+  dtype-proto/PPrototype
   (from-prototype [ptr datatype shape]
-    (make-pointer-of-type datatype (dtype-base/shape->ecount shape)))
+    (-> (dtype-proto/make-container :native-buffer datatype (apply * shape) {})
+        (->javacpp-ptr)))
+
 
   PToPtr
-  (->ptr-backing-store [item] item)
+  (convertible-to-javacpp-ptr? [item] true)
+  (->javacpp-ptr [item] item)
 
   jna/PToPtr
+  (is-jna-ptr-convertible? [item] true)
   (->ptr-backing-store [item]
     ;;Anything convertible to a pointer is convertible to a jna ptr too.
-    (let [^Pointer item-ptr (->ptr-backing-store item)]
+    (let [^Pointer item-ptr (->javacpp-ptr item)]
       (dtype-jna/make-jna-pointer (.address item-ptr))))
 
-  primitive/PToBuffer
+
+  dtype-proto/PToNioBuffer
+  (convertible-to-nio-buffer? [src] true)
   (->buffer-backing-store [src]
-    (ptr->buffer src))
+    (dtype-proto/->buffer-backing-store
+     (ptr->typed-buffer src)))
 
-  primitive/POffsetable
-  (offset-item [src offset]
-    (primitive/offset-item (dtype-jna/->typed-pointer src) offset))
 
-  primitive/PToArray
-  (->array [src] nil)
+  dtype-proto/PBuffer
+  (sub-buffer [src offset length]
+    (dtype-proto/sub-buffer (ptr->typed-buffer src)
+                            offset length))
+
+
+  dtype-proto/PToReader
+  (convertible-to-reader? [item] true)
+  (->reader [item options]
+    (dtype-proto/->reader (ptr->typed-buffer item) options))
+
+
+  dtype-proto/PToWriter
+  (convertible-to-writer? [item] true)
+  (->writer [item options]
+    (dtype-proto/->writer (ptr->typed-buffer item) options))
+
+
+  dtype-proto/PToArray
+  (->sub-array [src] nil)
   (->array-copy [src]
-    (primitive/->array-copy (unsigned/->typed-buffer src))))
+    (dtype-proto/->array-copy (ptr->typed-buffer src))))
+
+
+(defn make-pointer-of-type
+  [datatype ecount-or-seq]
+  (-> (dtype-proto/make-container :native-buffer datatype ecount-or-seq {})
+      (->javacpp-ptr)))
 
 
 (defn make-typed-pointer
@@ -205,14 +214,26 @@ to jna system."
 Thing must implement tech.jna/PToPtr,
 tech.datatype.base/PDatatype, and clojure.core.matrix.protocols/PElementCount."
   [item]
-  (when (and (satisfies? jna/PToPtr item)
-             (satisfies? dtype-base/PDatatype item)
-             (satisfies? mp/PElementCount item))
-    (let [address (-> (jna/->ptr-backing-store item)
-                      dtype-jna/pointer->address)
-          jvm-dtype (-> (dtype-base/get-datatype item)
-                        (unsigned/datatype->jvm-datatype))
-          n-elems (dtype-base/ecount item)]
-      (-> (make-empty-pointer-of-type jvm-dtype)
-          (offset-pointer address)
-          (set-pointer-limit-and-capacity n-elems)))))
+  (let [jna-ptr (jna/as-ptr item)
+        elem-count (dtype/ecount item)
+        datatype (dtype/get-datatype item)]
+    (when (and jna-ptr
+               (casting/host-numeric-types datatype)
+               (not= 0 elem-count))
+      (-> (make-empty-pointer-of-type (casting/host-flatten datatype))
+          (offset-pointer (/ (com.sun.jna.Pointer/nativeValue jna-ptr)
+                             (casting/numeric-byte-width datatype)))
+          (set-pointer-limit-and-capacity elem-count)))))
+
+
+(extend-type Object
+  PToPtr
+  (convertible-to-javacpp-ptr? [item]
+    (let [jna-ptr (jna/as-ptr item)
+        elem-count (dtype/ecount item)
+        datatype (dtype/get-datatype item)]
+    (and jna-ptr
+         (casting/numeric-type? datatype)
+         (not= 0 elem-count))))
+  (->javacpp-ptr [item]
+    (as-jpp-pointer item)))

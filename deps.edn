@@ -1,5 +1,6 @@
 {:paths ["src"]
- :deps {org.clojure/clojure {:mvn/version "1.9.0"}
+ :deps {org.clojure/clojure {:mvn/version "1.10.1-beta2"}
         org.bytedeco/javacpp {:mvn/version "1.4.4"}
-        techascent/tech.datatype {:mvn/version "3.10"}}
- :aliases {:test {:extra-deps {org.bytedeco.javacpp-presets/opencv-platform {:mvn/version "4.0.1-1.4.4"}}}}}
+        techascent/tech.datatype {:mvn/version "4.0-alpha28"}}
+ :aliases {:test {:extra-deps {org.bytedeco.javacpp-presets/opencv-platform
+                               {:mvn/version "4.0.1-1.4.4"}}}}}
