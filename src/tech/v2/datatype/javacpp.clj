@@ -127,13 +127,13 @@ threadsafe while (.position ptr offset) is not."
   (.set ^Field deallocator-field ptr nil))
 
 
-(defn ptr->buffer
-  "Get a nio buffer from the pointer to use in other places.  Note this
-  function is threadsafe while a raw .asBuffer call is not!!!
-  https://github.com/bytedeco/javacpp/issues/155."
-  [^Pointer ptr]
-  (.asBuffer (duplicate-pointer
-              (->javacpp-ptr ptr))))
+(defn ptr->typed-buffer
+  [item]
+  (let [item-dtype (dtype/get-datatype item)]
+    (dtype-jna/unsafe-address->typed-pointer
+     (com.sun.jna.Pointer/nativeValue (jna/->ptr-backing-store item))
+     (* (dtype/ecount item) (casting/numeric-byte-width (dtype/get-datatype item)))
+     (dtype/get-datatype item))))
 
 
 (extend-type Pointer
@@ -143,8 +143,9 @@ threadsafe while (.position ptr offset) is not."
   (ecount [ptr] (.capacity ptr))
   dtype-proto/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset options]
-    (dtype-proto/copy-raw->item! (typed-buffer/->typed-buffer raw-data) ary-target
-                                target-offset options))
+    (dtype-proto/copy-raw->item! (ptr->typed-buffer raw-data)
+                                 ary-target
+                                 target-offset options))
 
   dtype-proto/PPrototype
   (from-prototype [ptr datatype shape]
@@ -166,18 +167,33 @@ threadsafe while (.position ptr offset) is not."
 
   dtype-proto/PToNioBuffer
   (convertible-to-nio-buffer? [src] true)
-  (->buffer-backing-store [src] (ptr->buffer src))
+  (->buffer-backing-store [src]
+    (dtype-proto/->buffer-backing-store
+     (ptr->typed-buffer src)))
 
 
   dtype-proto/PBuffer
   (sub-buffer [src offset length]
-    (dtype-proto/sub-buffer (typed-buffer/->typed-buffer src)
+    (dtype-proto/sub-buffer (ptr->typed-buffer src)
                             offset length))
+
+
+  dtype-proto/PToReader
+  (convertible-to-reader? [item] true)
+  (->reader [item options]
+    (dtype-proto/->reader (ptr->typed-buffer item) options))
+
+
+  dtype-proto/PToWriter
+  (convertible-to-writer? [item] true)
+  (->writer [item options]
+    (dtype-proto/->writer (ptr->typed-buffer item) options))
+
 
   dtype-proto/PToArray
   (->sub-array [src] nil)
   (->array-copy [src]
-    (dtype-proto/->array-copy (typed-buffer/->typed-buffer src))))
+    (dtype-proto/->array-copy (ptr->typed-buffer src))))
 
 
 (defn make-pointer-of-type
