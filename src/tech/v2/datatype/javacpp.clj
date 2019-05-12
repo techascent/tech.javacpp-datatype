@@ -58,24 +58,9 @@
   (get-datatype [ptr] :float64))
 
 
-(defn make-pointer-of-type
-  (^Pointer  [datatype size-or-data options]
-   (-> (let [ary (dtype/make-array-of-type datatype size-or-data options)]
-         (condp = datatype
-           :int8 (BytePointer. ^bytes ary)
-           :int16 (ShortPointer. ^shorts ary)
-           :int32 (IntPointer. ^ints ary)
-           :int64 (LongPointer. ^longs ary)
-           :float32 (FloatPointer. ^floats ary)
-           :float64 (DoublePointer. ^doubles ary)))
-       resource/track))
-  (^Pointer [datatype size-or-data]
-   (make-pointer-of-type datatype size-or-data {})))
-
-
 (defn make-empty-pointer-of-type
   ^Pointer [datatype]
-  (condp = datatype
+  (case (casting/host-flatten datatype)
     :int8 (BytePointer.)
     :int16 (ShortPointer.)
     :int32 (IntPointer.)
@@ -163,7 +148,8 @@ threadsafe while (.position ptr offset) is not."
 
   dtype-proto/PPrototype
   (from-prototype [ptr datatype shape]
-    (make-pointer-of-type datatype (dtype-base/shape->ecount shape)))
+    (-> (dtype-proto/make-container :native-buffer datatype (apply * shape) {})
+        (->javacpp-ptr)))
 
 
   PToPtr
@@ -194,6 +180,12 @@ threadsafe while (.position ptr offset) is not."
     (dtype-proto/->array-copy (typed-buffer/->typed-buffer src))))
 
 
+(defn make-pointer-of-type
+  [datatype ecount-or-seq]
+  (-> (dtype-proto/make-container :native-buffer datatype ecount-or-seq {})
+      (->javacpp-ptr)))
+
+
 (defn make-typed-pointer
   "This module no longer has a typed pointer, function provided to ease portability
 to jna system."
@@ -213,7 +205,8 @@ tech.datatype.base/PDatatype, and clojure.core.matrix.protocols/PElementCount."
                (casting/host-numeric-types datatype)
                (not= 0 elem-count))
       (-> (make-empty-pointer-of-type (casting/host-flatten datatype))
-          (offset-pointer (com.sun.jna.Pointer/nativeValue jna-ptr))
+          (offset-pointer (/ (com.sun.jna.Pointer/nativeValue jna-ptr)
+                             (casting/numeric-byte-width datatype)))
           (set-pointer-limit-and-capacity elem-count)))))
 
 
