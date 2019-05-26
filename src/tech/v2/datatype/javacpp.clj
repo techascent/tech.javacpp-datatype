@@ -161,8 +161,11 @@ threadsafe while (.position ptr offset) is not."
   (is-jna-ptr-convertible? [item] true)
   (->ptr-backing-store [item]
     ;;Anything convertible to a pointer is convertible to a jna ptr too.
-    (let [^Pointer item-ptr (->javacpp-ptr item)]
-      (dtype-jna/make-jna-pointer (.address item-ptr))))
+    (let [^Pointer item-ptr (->javacpp-ptr item)
+          retval
+          (dtype-jna/make-jna-pointer (.address item-ptr))
+          src-map {:ptr-data item-ptr}]
+      (resource/track retval #(get src-map :ptr-data) [:gc])))
 
 
   dtype-proto/PToNioBuffer
